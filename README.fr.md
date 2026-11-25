@@ -21,6 +21,8 @@ français et chinois simplifié.
 
 ![grille des 16 ports, thème clair](docs/screenshots/grid-light.png)
 
+![écran de consentement OpenH264 au premier lancement](docs/screenshots/consent-dark.png)
+
 > Chaque capture ci-dessus est le client connecté à `kinan-sim`, pas à un
 > appareil réel.
 
@@ -73,6 +75,8 @@ et redistribuer le résultat ne donne pas la même couverture. Récupérer à
 l'exécution place clairement le projet du bon côté de cette ligne. Voir la
 [OpenH264 Binary License](https://www.openh264.org/BINARY_LICENSE.txt)
 pour la formulation officielle.
+
+> **OpenH264 Video Codec provided by Cisco Systems, Inc.**
 
 ## Compilation depuis les sources
 

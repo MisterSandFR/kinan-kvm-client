@@ -4,6 +4,8 @@ Kinan KVM Client - third-party notices
 OpenH264
 --------
 
+OpenH264 Video Codec provided by Cisco Systems, Inc.
+
 This application decodes H.264 video using the OpenH264 library
 published by Cisco Systems, Inc. The library is **not** bundled with
 this project. On first launch the application downloads it from

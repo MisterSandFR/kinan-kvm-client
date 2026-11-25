@@ -22,6 +22,8 @@ A *lire en français :* [`README.fr.md`](README.fr.md).
 
 ![grid of 16 ports, light theme](docs/screenshots/grid-light.png)
 
+![first-launch consent screen for the OpenH264 download](docs/screenshots/consent-dark.png)
+
 > Every screenshot above is the client connected to `kinan-sim`, not to a
 > real device.
 
@@ -75,6 +77,8 @@ and redistributing the resulting binary would *not* grant the same
 coverage. Fetching at runtime keeps the project clearly on the covered
 side of that line. See the [OpenH264 Binary License](https://www.openh264.org/BINARY_LICENSE.txt)
 for the official wording.
+
+> **OpenH264 Video Codec provided by Cisco Systems, Inc.**
 
 ## Build from source
 
