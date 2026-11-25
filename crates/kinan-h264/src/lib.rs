@@ -201,20 +201,6 @@ pub fn load(path: &Path) -> Result<OpenH264API> {
     OpenH264API::from_blob_path(path).with_context(|| format!("loading {}", path.display()))
 }
 
-/// What to show a user who declines the download.
-pub const CONSENT_MESSAGE_EN: &str =
-    "To decode the device's H.264 video, this application needs to download \
-the OpenH264 library published by Cisco at ciscobinary.openh264.org. The binary \
-is about 500 KB. Its SHA-256 is verified before it is used. If you decline, the \
-application cannot display video and will exit.";
-
-/// Localised French version of [`CONSENT_MESSAGE_EN`].
-pub const CONSENT_MESSAGE_FR: &str =
-    "Pour décoder le flux vidéo H.264 de l'appareil, l'application doit télécharger \
-la bibliothèque OpenH264 publiée par Cisco sur ciscobinary.openh264.org. Le \
-fichier pèse environ 500 Ko ; son empreinte SHA-256 est vérifiée avant usage. \
-Sans cette bibliothèque, l'application ne peut pas afficher la vidéo et se fermera.";
-
 #[cfg(test)]
 mod tests {
     use super::*;
