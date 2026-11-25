@@ -15,8 +15,9 @@ use crate::session::{self, Command, Event, Handle};
 use crate::theme;
 
 enum Screen {
-    Loading,
     Privacy,
+    OpenH264Consent,
+    Loading,
     Login,
     Edit(usize), // index into store.profiles; usize::MAX for new
     Grid(usize),
@@ -38,8 +39,9 @@ pub struct App {
     store: Store,
     i18n: I18n,
     h264: Arc<Mutex<H264State>>,
-    h264_next_screen: Screen,
     screen: Screen,
+    local_path_buf: String,
+    local_path_error: Option<String>,
     status: String,
     status_at: Instant,
     ports_cache: Arc<Mutex<PortsCache>>,
@@ -79,25 +81,29 @@ impl App {
             i18n.set_language(&settings.language);
         }
         theme::apply(&cc.egui_ctx, settings.theme);
-        let next_screen = if settings.privacy_warning_seen {
+        // The library may already be cached on disk from a previous run: try the
+        // offline paths first so we only prompt for consent once.
+        let h264 = Arc::new(Mutex::new(initial_h264_state(&settings)));
+        let starting_screen = if !settings.privacy_warning_seen {
+            Screen::Privacy
+        } else if matches!(&*h264.lock().unwrap(), H264State::Ready(_)) {
             Screen::Login
         } else {
-            Screen::Privacy
+            Screen::OpenH264Consent
         };
-        let downloaded = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let total = Arc::new(Mutex::new(None));
-        let h264 = Arc::new(Mutex::new(H264State::Loading {
-            downloaded: downloaded.clone(),
-            total: total.clone(),
-        }));
-        spawn_h264_fetch(h264.clone(), downloaded, total, cc.egui_ctx.clone());
+        let local_path_buf = settings
+            .openh264_local_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
         Self {
             settings,
             store,
             i18n,
             h264,
-            h264_next_screen: next_screen,
-            screen: Screen::Loading,
+            screen: starting_screen,
+            local_path_buf,
+            local_path_error: None,
             status: String::new(),
             status_at: Instant::now(),
             ports_cache: Arc::new(Mutex::new(PortsCache::default())),
@@ -278,16 +284,14 @@ impl eframe::App for App {
         if matches!(self.screen, Screen::Loading) {
             let ready = matches!(&*self.h264.lock().unwrap(), H264State::Ready(_));
             if ready {
-                self.screen = match self.h264_next_screen {
-                    Screen::Privacy => Screen::Privacy,
-                    _ => Screen::Login,
-                };
+                self.screen = Screen::Login;
             }
         }
 
         match self.screen {
-            Screen::Loading => draw_loading(self, ctx),
             Screen::Privacy => draw_privacy(self, ctx),
+            Screen::OpenH264Consent => draw_openh264_consent(self, ctx),
+            Screen::Loading => draw_loading(self, ctx),
             Screen::Login => draw_login(self, ctx),
             Screen::Edit(idx) => draw_edit(self, ctx, idx),
             Screen::Grid(idx) => draw_grid(self, ctx, idx),
@@ -336,7 +340,13 @@ fn draw_privacy(app: &mut App, ctx: &Context) {
             if ui.button(app.t("privacy.ack")).clicked() {
                 app.settings.privacy_warning_seen = true;
                 let _ = save_settings(&app.settings);
-                app.screen = Screen::Login;
+                // After privacy, either go straight to Login (library already
+                // cached / local path set) or to the OpenH264 consent screen.
+                app.screen = if matches!(&*app.h264.lock().unwrap(), H264State::Ready(_)) {
+                    Screen::Login
+                } else {
+                    Screen::OpenH264Consent
+                };
             }
         });
     });
@@ -1010,4 +1020,85 @@ fn draw_loading(app: &mut App, ctx: &Context) {
             }
         });
     });
+}
+
+fn initial_h264_state(settings: &Settings) -> H264State {
+    // 1. User-provided offline path overrides everything.
+    if let Some(p) = &settings.openh264_local_path {
+        if p.is_file() && kinan_h264::verify_any(p).is_ok() {
+            return H264State::Ready(p.clone());
+        }
+    }
+    // 2. Cached download from a previous launch.
+    if let Ok(p) = kinan_h264::cache_path() {
+        if p.is_file() && kinan_h264::verify(&p).is_ok() {
+            return H264State::Ready(p);
+        }
+    }
+    // 3. Nothing available yet. Waiting for consent.
+    H264State::Loading {
+        downloaded: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        total: Arc::new(Mutex::new(None)),
+    }
+}
+
+fn draw_openh264_consent(app: &mut App, ctx: &Context) {
+    egui::CentralPanel::default().show(ctx, |ui| {
+        ui.vertical_centered(|ui| {
+            ui.add_space(24.0);
+            ui.heading(app.t("openh264.consent.title"));
+            ui.add_space(12.0);
+            ui.label(app.t("openh264.consent.body"));
+            ui.add_space(6.0);
+            ui.weak(app.t("openh264.consent.license"));
+            ui.add_space(18.0);
+            ui.horizontal(|ui| {
+                ui.add_space(ui.available_width() / 2.0 - 180.0);
+                if ui.button(app.t("openh264.consent.accept")).clicked() {
+                    app.settings.openh264_consent = true;
+                    let _ = save_settings(&app.settings);
+                    kick_off_download(app, ctx.clone());
+                    app.screen = Screen::Loading;
+                }
+                if ui.button(app.t("action.cancel")).clicked() {
+                    std::process::exit(0);
+                }
+            });
+            ui.add_space(24.0);
+            ui.separator();
+            ui.add_space(12.0);
+            ui.heading(app.t("openh264.local.title"));
+            ui.label(app.t("openh264.local.body"));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(&mut app.local_path_buf);
+                if ui.button(app.t("openh264.local.use")).clicked() {
+                    let p = std::path::PathBuf::from(app.local_path_buf.trim());
+                    match kinan_h264::verify_any(&p) {
+                        Ok(()) => {
+                            app.settings.openh264_local_path = Some(p.clone());
+                            let _ = save_settings(&app.settings);
+                            *app.h264.lock().unwrap() = H264State::Ready(p);
+                            app.local_path_error = None;
+                            app.screen = Screen::Login;
+                        }
+                        Err(e) => app.local_path_error = Some(format!("{e:#}")),
+                    }
+                }
+            });
+            if let Some(e) = &app.local_path_error {
+                ui.colored_label(Color32::LIGHT_RED, e);
+            }
+        });
+    });
+}
+
+fn kick_off_download(app: &App, ctx: Context) {
+    let downloaded = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let total = Arc::new(Mutex::new(None));
+    *app.h264.lock().unwrap() = H264State::Loading {
+        downloaded: downloaded.clone(),
+        total: total.clone(),
+    };
+    spawn_h264_fetch(app.h264.clone(), downloaded, total, ctx);
 }
