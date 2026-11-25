@@ -53,28 +53,40 @@ Des binaires pour Windows (et, quand la chaîne le permet, Linux) sont
 publiés avec chaque tag sur GitHub Releases. Télécharger, décompresser,
 lancer `kinan-kvm-client`.
 
+## OpenH264 téléchargé au premier lancement
+
+Aucun décodeur binaire n'est embarqué dans le projet. Au premier
+lancement, l'application récupère la version officielle d'OpenH264
+correspondant à la plateforme depuis `ciscobinary.openh264.org`, vérifie
+son empreinte SHA-256 par rapport à une liste pré-enregistrée et met le
+fichier en cache dans le répertoire utilisateur (`~/.local/share/kinan-kvm-client/openh264/`
+sous Linux, `AppData\Roaming\` sous Windows, `~/Library/Application Support/`
+sous macOS). Les lancements suivants utilisent le fichier en cache.
+
+La licence binaire Cisco ne couvre les redevances H.264 **que** pour un
+binaire obtenu depuis leur serveur ; compiler OpenH264 depuis les sources
+et redistribuer le résultat ne donne pas la même couverture. Récupérer à
+l'exécution place clairement le projet du bon côté de cette ligne. Voir la
+[OpenH264 Binary License](https://www.openh264.org/BINARY_LICENSE.txt)
+pour la formulation officielle.
+
 ## Compilation depuis les sources
 
-Rust 1.75 ou plus récent. Le décodage utilise la caisse
-[`openh264`](https://crates.io/crates/openh264) avec la fonctionnalité
-`source`, qui compile OpenH264 depuis la source BSD-2-Clause de Cisco à la
-première compilation ; une chaîne C/C++ fonctionnelle est nécessaire :
+Rust 1.75 ou plus récent.
 
-* **Windows** : composant « Desktop development with C++ » de Visual
-  Studio Build Tools, ou une distribution MinGW-w64 posix dans le `PATH`.
-* **Linux** : `gcc`, `g++`, `nasm`, plus les dépendances système de
-  `winit`/`glow` (`libgl1`, `libxkbcommon-x11-0`, `libwayland-dev`, …).
+* **Windows** : rien de plus que la chaîne MSVC (ou MinGW) installée par
+  Rust lui-même.
+* **Linux** : les bibliothèques système de `winit`/`glow` (`libgl1`,
+  `libxkbcommon-x11-0`, `libwayland-dev`, `libfontconfig1-dev`).
 * **macOS** : outils en ligne de commande Xcode.
-
-Puis :
 
 ```sh
 cargo build --release
 ./target/release/kinan-kvm-client
 ```
 
-Pour une compilation croisée Linux → Windows, installer `mingw-w64`
-(C et C++, variante posix) et lancer :
+Pour une compilation croisée Linux → Windows, installer `mingw-w64` et
+lancer :
 
 ```sh
 cargo build --release --target x86_64-pc-windows-gnu

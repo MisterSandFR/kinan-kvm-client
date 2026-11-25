@@ -1,44 +1,29 @@
 Kinan KVM Client - third-party notices
 ======================================
 
-This project depends on, and compiles into its release binaries, the
-OpenH264 decoder/encoder library published by Cisco Systems, Inc., and
-distributed under the BSD-2-Clause license. The sources are fetched by
-the `openh264-sys2` crate at build time and are not redistributed in
-this repository.
+OpenH264
+--------
 
-OpenH264 upstream:
-  https://github.com/cisco/openh264
+This application decodes H.264 video using the OpenH264 library
+published by Cisco Systems, Inc. The library is **not** bundled with
+this project. On first launch the application downloads it from
+ciscobinary.openh264.org, verifies its SHA-256 against a pinned list,
+and caches it in the user's data directory.
 
-BSD 2-Clause License
-Copyright (c) 2013, Cisco Systems. All rights reserved.
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in
-      the documentation and/or other materials provided with the
-      distribution.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
-IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
-TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
-PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+Fetching the official Cisco binary places the use of OpenH264 under
+Cisco's "OpenH264 Binary License", which covers the H.264 royalties for
+that binary. The license text is at:
 
-OpenH264 may be subject to patent claims under H.264/MPEG-4 AVC. The
-OpenH264 project explains at https://www.openh264.org/BINARY_LICENSE.txt
-that Cisco pays the applicable licensing fees for binaries it publishes.
-Projects that compile OpenH264 from source themselves should review
-this situation before shipping binaries in a commercial context.
+    https://www.openh264.org/BINARY_LICENSE.txt
 
-Other crates in `Cargo.lock` carry their own permissive licenses
-(MIT, Apache-2.0, BSD-*, MPL-2.0). Their license texts are available
-in each crate's source on crates.io.
+Source code for the library (BSD 2-Clause) is hosted at:
+
+    https://github.com/cisco/openh264
+
+Rust crates
+-----------
+
+Other dependencies declared in `Cargo.lock` are distributed under the
+permissive licenses (MIT, Apache-2.0, BSD-*, MPL-2.0, Unlicense, ISC)
+their authors chose. Their individual license texts are available in
+each crate's source on crates.io.

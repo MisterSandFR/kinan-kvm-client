@@ -55,27 +55,39 @@ Binary releases for Windows (and, where the toolchain allows, Linux) are
 attached to each tag on GitHub Releases. Download the archive for your
 platform, extract it, and run `kinan-kvm-client`.
 
+## OpenH264 is fetched at first launch
+
+No decoder binary is shipped with this project. On first launch the
+application downloads the official OpenH264 release that matches the
+host platform from `ciscobinary.openh264.org`, verifies its SHA-256
+against a pinned list, and caches it under the user's data directory
+(`~/.local/share/kinan-kvm-client/openh264/` on Linux, `AppData\Roaming\`
+on Windows, `~/Library/Application Support/` on macOS). Subsequent
+launches use the cached file.
+
+Cisco's binary license covers the H.264 royalties only when the binary
+is obtained from their own host; compiling the OpenH264 source yourself
+and redistributing the resulting binary would *not* grant the same
+coverage. Fetching at runtime keeps the project clearly on the covered
+side of that line. See the [OpenH264 Binary License](https://www.openh264.org/BINARY_LICENSE.txt)
+for the official wording.
+
 ## Build from source
 
-Rust 1.75 or newer. The video stack uses the [`openh264`](https://crates.io/crates/openh264)
-crate with the `source` feature, which compiles OpenH264 from the Cisco
-BSD-2-Clause source on first build; you need a working C/C++ toolchain:
+Rust 1.75 or newer.
 
-* **Windows**: the "Desktop development with C++" workload from
-  the Visual Studio Build Tools, or a MinGW-w64 posix distribution on `PATH`.
-* **Linux**: `gcc`, `g++`, `nasm`, plus whatever your distribution needs for
-  `winit`/`glow` (`libgl1`, `libxkbcommon-x11-0`, `libwayland-dev`, ...).
+* **Windows**: nothing extra; the MSVC or MinGW toolchain Rust installs
+  for you is enough.
+* **Linux**: the system libraries `winit`/`glow` depend on (`libgl1`,
+  `libxkbcommon-x11-0`, `libwayland-dev`, `libfontconfig1-dev`).
 * **macOS**: Xcode command-line tools.
-
-Then:
 
 ```sh
 cargo build --release
 ./target/release/kinan-kvm-client
 ```
 
-For a cross-compiled Windows build from Linux, install
-`mingw-w64` (both C and C++, posix flavour) and run
+For a Linux-to-Windows cross build, install `mingw-w64` and run
 
 ```sh
 cargo build --release --target x86_64-pc-windows-gnu
