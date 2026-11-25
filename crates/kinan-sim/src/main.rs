@@ -334,11 +334,17 @@ fn serve_video(mut stream: TcpStream, opts: &Options, state: &State) -> Result<(
     let mut encoder = Encoder::with_api_config(api, cfg)?;
     let mut counter = 0u32;
     let started = Instant::now();
-    while counter < 450 {
-        // ~15 seconds at 30 fps.
+    // Stream forever until the client disconnects. The write errors on close
+    // will drop us out of the loop.
+    loop {
         let idx = state.current.load(Ordering::SeqCst);
         let frame = render_test_pattern(width, height, counter, idx);
         let yuv = YUVBuffer::from_vec(frame, width, height);
+        // Issue a keyframe every second so the client recovers quickly after
+        // the burst-skip filter releases, exactly like the real device does.
+        if counter % 30 == 0 {
+            encoder.force_intra_frame();
+        }
         let bits = encoder.encode(&yuv)?;
         let mut body = Vec::new();
         for i in 0..bits.num_layers() {
@@ -361,7 +367,6 @@ fn serve_video(mut stream: TcpStream, opts: &Options, state: &State) -> Result<(
         counter = counter.wrapping_add(1);
         thread::sleep(Duration::from_millis(33));
     }
-    Ok(())
 }
 
 fn render_test_pattern(width: usize, height: usize, counter: u32, selected: u8) -> Vec<u8> {
