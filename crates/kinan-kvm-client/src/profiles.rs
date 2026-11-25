@@ -27,8 +27,31 @@ pub struct Profile {
     #[serde(default)]
     pub input_ports: Vec<u8>,
     /// Custom port names (`port_number` -> label).
-    #[serde(default)]
+    #[serde(default, with = "string_keys")]
     pub port_labels: HashMap<u8, String>,
+}
+
+/// TOML keys are strings: store port numbers as "6", read them back as u8.
+mod string_keys {
+    use std::collections::{BTreeMap, HashMap};
+
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(m: &HashMap<u8, String>, s: S) -> Result<S::Ok, S::Error> {
+        let sorted: BTreeMap<u8, &String> = m.iter().map(|(k, v)| (*k, v)).collect();
+        s.collect_map(sorted.into_iter().map(|(k, v)| (k.to_string(), v)))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<HashMap<u8, String>, D::Error> {
+        let raw = HashMap::<String, String>::deserialize(d)?;
+        raw.into_iter()
+            .map(|(k, v)| {
+                k.parse::<u8>().map(|n| (n, v)).map_err(|_| {
+                    serde::de::Error::custom(format!("port label key `{k}` is not a port number"))
+                })
+            })
+            .collect()
+    }
 }
 
 fn default_web_port() -> u16 {
@@ -103,9 +126,23 @@ pub fn store_path() -> PathBuf {
 }
 
 pub fn load() -> Store {
-    match std::fs::read_to_string(store_path()) {
-        Ok(s) => toml::from_str(&s).unwrap_or_default(),
-        Err(_) => Store::default(),
+    let path = store_path();
+    let Ok(s) = std::fs::read_to_string(&path) else {
+        return Store::default();
+    };
+    match toml::from_str(&s) {
+        Ok(store) => store,
+        Err(e) => {
+            // Next save would overwrite it: keep the unreadable file aside.
+            let aside = path.with_extension("toml.invalid");
+            log::warn!(
+                "profiles: {} unreadable ({e}), kept as {}",
+                path.display(),
+                aside.display()
+            );
+            let _ = std::fs::copy(&path, &aside);
+            Store::default()
+        }
     }
 }
 
@@ -134,5 +171,31 @@ mod tests {
     fn classifies_public_ipv4() {
         assert!(!is_local_hostname("8.8.8.8"));
         assert!(!is_local_hostname("1.1.1.1"));
+    }
+
+    #[test]
+    fn port_labels_round_trip() {
+        let mut p = super::Profile::default();
+        p.port_labels.insert(6, "pve06".into());
+        let s = super::Store {
+            profiles: vec![p],
+            last_used: Some(0),
+        };
+        let body = toml::to_string_pretty(&s).expect("serialize");
+        let back: super::Store = toml::from_str(&body).expect("deserialize");
+        assert_eq!(
+            back.profiles[0].port_labels.get(&6).map(String::as_str),
+            Some("pve06")
+        );
+    }
+
+    #[test]
+    fn reads_hand_written_port_labels() {
+        let body = "[[profiles]]\nname = \"a\"\nhost = \"127.0.0.1\"\ndevice_ip = \"10.0.0.1\"\nweb_user = \"admin\"\nweb_pass = \"\"\n\n[profiles.port_labels]\n6 = \"pve06\"\n";
+        let back: super::Store = toml::from_str(body).expect("deserialize");
+        assert_eq!(
+            back.profiles[0].port_labels.get(&6).map(String::as_str),
+            Some("pve06")
+        );
     }
 }
