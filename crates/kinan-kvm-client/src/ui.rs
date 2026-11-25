@@ -48,6 +48,7 @@ pub struct App {
     web: Option<Arc<KinanWeb>>,
     session: Option<Handle>,
     frame_tex: Option<TextureHandle>,
+    crisp: bool,
     frame_size: (u32, u32),
     resolution: (u16, u16),
     fps: f32,
@@ -110,6 +111,7 @@ impl App {
             web: None,
             session: None,
             frame_tex: None,
+            crisp: false,
             frame_size: (0, 0),
             resolution: (1024, 768),
             fps: 0.0,
@@ -206,10 +208,11 @@ impl App {
                 Event::Frame { w, h, rgb } => {
                     self.frame_size = (w, h);
                     let img = ColorImage::from_rgb([w as usize, h as usize], &rgb);
+                    let opts = self.tex_options();
                     if let Some(tex) = self.frame_tex.as_mut() {
-                        tex.set(img, TextureOptions::LINEAR);
+                        tex.set(img, opts);
                     } else {
-                        self.frame_tex = Some(ctx.load_texture("kvm", img, TextureOptions::LINEAR));
+                        self.frame_tex = Some(ctx.load_texture("kvm", img, opts));
                     }
                     self.frames_since.1 = self.frames_since.1.saturating_add(1);
                     let elapsed = self.frames_since.0.elapsed();
@@ -229,6 +232,14 @@ impl App {
             self.want_capture = false;
             self.frame_tex = None;
             self.frame_size = (0, 0);
+        }
+    }
+
+    fn tex_options(&self) -> TextureOptions {
+        if self.crisp {
+            TextureOptions::NEAREST
+        } else {
+            TextureOptions::LINEAR
         }
     }
 
@@ -642,9 +653,21 @@ fn draw_viewer(app: &mut App, ctx: &Context, profile_idx: usize, port: u8) {
         let avail = ui.available_size();
         let (rect, hovered_image) = if let Some(tex) = &app.frame_tex {
             let (w, h) = app.frame_size;
-            let scale = (avail.x / w as f32).min(avail.y / h as f32).max(0.1);
-            let size = egui::vec2(w as f32 * scale, h as f32 * scale);
-            let (r, resp) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
+            // Échelle en pixels physiques : entière dès que l'image tient, pour rester nette.
+            let ppp = ctx.pixels_per_point();
+            let fit = (avail.x / w as f32).min(avail.y / h as f32) * ppp;
+            let phys = if fit >= 1.0 { fit.floor() } else { fit.max(0.1) };
+            app.crisp = fit >= 1.0;
+            let size = egui::vec2(w as f32 * phys / ppp, h as f32 * phys / ppp);
+            let (area, _) = ui.allocate_exact_size(avail, egui::Sense::hover());
+            ui.painter().rect_filled(area, 0.0, Color32::BLACK);
+            let c = area.center();
+            let min = egui::pos2(
+                ((c.x - size.x / 2.0) * ppp).round() / ppp,
+                ((c.y - size.y / 2.0) * ppp).round() / ppp,
+            );
+            let r = egui::Rect::from_min_size(min, size);
+            let resp = ui.interact(r, ui.id().with("kvm-video"), egui::Sense::click_and_drag());
             ui.painter().image(
                 tex.id(),
                 r,
