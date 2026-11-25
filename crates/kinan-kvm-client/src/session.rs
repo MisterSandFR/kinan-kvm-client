@@ -11,7 +11,6 @@ use anyhow::{anyhow, Context, Result};
 use kinan_protocol::{km, switch, video, Modifier, Modifiers};
 use openh264::decoder::{Decoder, DecoderConfig};
 use openh264::formats::YUVSource;
-use openh264::OpenH264API;
 
 use crate::profiles::Profile;
 
@@ -65,14 +64,14 @@ impl Handle {
     }
 }
 
-pub fn spawn(profile: Profile, port: u8) -> Handle {
+pub fn spawn(profile: Profile, port: u8, h264_path: std::path::PathBuf) -> Handle {
     let (ev_tx, ev_rx) = mpsc::sync_channel(64);
     let (cmd_tx, cmd_rx) = mpsc::channel();
     let stop = Arc::new(AtomicBool::new(false));
     let stop2 = stop.clone();
     let join = std::thread::Builder::new()
         .name(format!("kinan-session-{port}"))
-        .spawn(move || run(profile, port, ev_tx, cmd_rx, stop2))
+        .spawn(move || run(profile, port, h264_path, ev_tx, cmd_rx, stop2))
         .expect("spawn session thread");
     Handle {
         port,
@@ -106,6 +105,7 @@ fn connect(host: &str, port: u16, timeout: Duration) -> Result<TcpStream> {
 fn run(
     profile: Profile,
     port: u8,
+    h264_path: std::path::PathBuf,
     ev: SyncSender<Event>,
     cmds: mpsc::Receiver<Command>,
     stop: Arc<AtomicBool>,
@@ -137,8 +137,8 @@ fn run(
         video.set_read_timeout(Some(Duration::from_millis(500)))?;
         video.write_all(&video::request_packet(v4, port)?)?;
 
-        // 3. Decoder (OpenH264 source).
-        let api = OpenH264API::from_source();
+        // 3. Decoder: OpenH264 is loaded from the Cisco binary verified at startup.
+        let api = kinan_h264::load(&h264_path)?;
         let mut decoder = Decoder::with_api_config(api, DecoderConfig::new())?;
 
         // 4. Keyboard/mouse is closed by default.

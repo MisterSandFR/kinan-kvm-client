@@ -15,6 +15,7 @@ use crate::session::{self, Command, Event, Handle};
 use crate::theme;
 
 enum Screen {
+    Loading,
     Privacy,
     Login,
     Edit(usize), // index into store.profiles; usize::MAX for new
@@ -23,10 +24,21 @@ enum Screen {
     Settings,
 }
 
+enum H264State {
+    Loading {
+        downloaded: Arc<std::sync::atomic::AtomicU64>,
+        total: Arc<Mutex<Option<u64>>>,
+    },
+    Ready(std::path::PathBuf),
+    Failed(String),
+}
+
 pub struct App {
     settings: Settings,
     store: Store,
     i18n: I18n,
+    h264: Arc<Mutex<H264State>>,
+    h264_next_screen: Screen,
     screen: Screen,
     status: String,
     status_at: Instant,
@@ -67,16 +79,25 @@ impl App {
             i18n.set_language(&settings.language);
         }
         theme::apply(&cc.egui_ctx, settings.theme);
-        let screen = if settings.privacy_warning_seen {
+        let next_screen = if settings.privacy_warning_seen {
             Screen::Login
         } else {
             Screen::Privacy
         };
+        let downloaded = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let total = Arc::new(Mutex::new(None));
+        let h264 = Arc::new(Mutex::new(H264State::Loading {
+            downloaded: downloaded.clone(),
+            total: total.clone(),
+        }));
+        spawn_h264_fetch(h264.clone(), downloaded, total, cc.egui_ctx.clone());
         Self {
             settings,
             store,
             i18n,
-            screen,
+            h264,
+            h264_next_screen: next_screen,
+            screen: Screen::Loading,
             status: String::new(),
             status_at: Instant::now(),
             ports_cache: Arc::new(Mutex::new(PortsCache::default())),
@@ -206,13 +227,17 @@ impl App {
     }
 
     fn start_session(&mut self, profile_idx: usize, port: u8) {
+        let path = match &*self.h264.lock().unwrap() {
+            H264State::Ready(p) => p.clone(),
+            _ => return,
+        };
         self.stop_session();
         let profile = self.store.profiles[profile_idx].clone();
         self.input_allowed = profile.input_ports.contains(&port);
         self.frame_tex = None;
         self.frame_size = (0, 0);
         self.no_signal = false;
-        let h = session::spawn(profile, port);
+        let h = session::spawn(profile, port, path);
         self.session = Some(h);
         self.screen = Screen::Viewer {
             profile: profile_idx,
@@ -243,11 +268,25 @@ impl eframe::App for App {
         self.drain_events(ctx);
         if self.session.is_some() {
             ctx.request_repaint_after(Duration::from_millis(33));
+        } else if matches!(self.screen, Screen::Loading) {
+            ctx.request_repaint_after(Duration::from_millis(100));
         } else {
             ctx.request_repaint_after(Duration::from_millis(250));
         }
 
+        // Transition out of the loading screen once OpenH264 is ready.
+        if matches!(self.screen, Screen::Loading) {
+            let ready = matches!(&*self.h264.lock().unwrap(), H264State::Ready(_));
+            if ready {
+                self.screen = match self.h264_next_screen {
+                    Screen::Privacy => Screen::Privacy,
+                    _ => Screen::Login,
+                };
+            }
+        }
+
         match self.screen {
+            Screen::Loading => draw_loading(self, ctx),
             Screen::Privacy => draw_privacy(self, ctx),
             Screen::Login => draw_login(self, ctx),
             Screen::Edit(idx) => draw_edit(self, ctx, idx),
@@ -887,4 +926,88 @@ fn key_to_hid(k: Key) -> u8 {
         Key::ArrowUp => 0x52,
         _ => 0,
     }
+}
+
+fn spawn_h264_fetch(
+    state: Arc<Mutex<H264State>>,
+    downloaded: Arc<std::sync::atomic::AtomicU64>,
+    total: Arc<Mutex<Option<u64>>>,
+    ctx: Context,
+) {
+    std::thread::Builder::new()
+        .name("kinan-h264-fetch".into())
+        .spawn(move || {
+            let total_for_cb = total.clone();
+            let downloaded_for_cb = downloaded.clone();
+            let ctx_for_cb = ctx.clone();
+            let progress: kinan_h264::ProgressFn = Arc::new(move |d: u64, t: Option<u64>| {
+                downloaded_for_cb.store(d, std::sync::atomic::Ordering::SeqCst);
+                if let Some(tt) = t {
+                    *total_for_cb.lock().unwrap() = Some(tt);
+                }
+                ctx_for_cb.request_repaint();
+            });
+            let result = kinan_h264::ensure_available(Some(progress));
+            let mut s = state.lock().unwrap();
+            *s = match result {
+                Ok(p) => H264State::Ready(p),
+                Err(e) => H264State::Failed(format!("{e:#}")),
+            };
+            ctx.request_repaint();
+        })
+        .expect("spawn h264 fetch thread");
+}
+
+fn draw_loading(app: &mut App, ctx: &Context) {
+    // Snapshot the state to release the mutex before drawing.
+    let snap = match &*app.h264.lock().unwrap() {
+        H264State::Loading { downloaded, total } => {
+            let d = downloaded.load(std::sync::atomic::Ordering::SeqCst);
+            let t = *total.lock().unwrap();
+            Some((d, t, None::<String>))
+        }
+        H264State::Ready(_) => None,
+        H264State::Failed(e) => Some((0, None, Some(e.clone()))),
+    };
+    egui::CentralPanel::default().show(ctx, |ui| {
+        ui.vertical_centered(|ui| {
+            ui.add_space(60.0);
+            ui.heading(app.t("app.title"));
+            ui.add_space(24.0);
+            match snap {
+                Some((downloaded, total, None)) => {
+                    ui.label(app.t("openh264.fetching"));
+                    ui.weak(app.t("openh264.explain"));
+                    ui.add_space(12.0);
+                    let frac = match total {
+                        Some(t) if t > 0 => (downloaded as f32 / t as f32).clamp(0.0, 1.0),
+                        _ => 0.0,
+                    };
+                    ui.add(
+                        egui::ProgressBar::new(frac)
+                            .desired_width(360.0)
+                            .text(format!("{} KB", downloaded / 1024)),
+                    );
+                }
+                Some((_, _, Some(err))) => {
+                    ui.colored_label(Color32::LIGHT_RED, app.t("openh264.failed"));
+                    ui.weak(err);
+                    ui.add_space(12.0);
+                    if ui.button(app.t("action.refresh")).clicked() {
+                        // Restart the fetch.
+                        let downloaded = Arc::new(std::sync::atomic::AtomicU64::new(0));
+                        let total = Arc::new(Mutex::new(None));
+                        *app.h264.lock().unwrap() = H264State::Loading {
+                            downloaded: downloaded.clone(),
+                            total: total.clone(),
+                        };
+                        spawn_h264_fetch(app.h264.clone(), downloaded, total, ctx.clone());
+                    }
+                }
+                None => {
+                    ui.spinner();
+                }
+            }
+        });
+    });
 }
