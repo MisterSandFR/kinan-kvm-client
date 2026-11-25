@@ -110,7 +110,30 @@ fn run(
     cmds: mpsc::Receiver<Command>,
     stop: Arc<AtomicBool>,
 ) {
+    let done = Arc::new(AtomicBool::new(false));
     let r: Result<()> = (|| {
+        // Le KVM coupe la vidéo sans connexion web récente depuis la même adresse.
+        let web = Arc::new(crate::kinan_web::KinanWeb::new(
+            format!("http://{}:{}", profile.host, profile.web_port),
+            profile.web_user.clone(),
+            profile.web_pass.clone(),
+        ));
+        web.login().context("web login")?;
+        let _ = web.ports();
+        {
+            let (web, stop, done) = (web.clone(), stop.clone(), done.clone());
+            std::thread::spawn(move || {
+                let mut last = Instant::now();
+                while !stop.load(Ordering::SeqCst) && !done.load(Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_secs(1));
+                    if last.elapsed() >= Duration::from_secs(60) {
+                        let _ = web.ports();
+                        last = Instant::now();
+                    }
+                }
+            });
+        }
+
         let _ = ev.try_send(Event::Status(format!("switching to port {port}")));
 
         // 1. Switch channel (single-shot).
@@ -265,6 +288,7 @@ fn run(
         }
         Ok(())
     })();
+    done.store(true, Ordering::SeqCst);
 
     if let Err(e) = r {
         let _ = ev.try_send(Event::Error(format!("{e:#}")));

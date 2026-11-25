@@ -59,7 +59,7 @@ impl KinanWeb {
         }
     }
 
-    fn login(&self) -> Result<()> {
+    pub fn login(&self) -> Result<()> {
         let enc = des::str_enc(&self.password, "123456789");
         let body = format!(
             "username={}&password={}",
