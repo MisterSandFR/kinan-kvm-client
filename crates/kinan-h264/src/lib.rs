@@ -148,16 +148,36 @@ pub fn ensure_available(progress: Option<ProgressFn>) -> Result<PathBuf> {
 
 /// Check the file's SHA-256 against the pinned list.
 pub fn verify(path: &Path) -> Result<()> {
+    verify_by_known_name(path, None)
+}
+
+/// Verify a user-provided OpenH264 library by brute-forcing its hash against
+/// the list. Used by the "local file" escape hatch so the operator can point
+/// at any of the hashes we know about, under any file name.
+pub fn verify_any(path: &Path) -> Result<()> {
+    verify_by_known_name(path, Some("<any>"))
+}
+
+fn verify_by_known_name(path: &Path, allow_any: Option<&str>) -> Result<()> {
     use sha2::{Digest, Sha256};
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let digest = Sha256::digest(&bytes);
+    let got = hex(&digest);
+    if allow_any.is_some() {
+        if KNOWN_HASHES.iter().any(|(_, h)| *h == got) {
+            return Ok(());
+        }
+        bail!(
+            "SHA-256 {got} for {} does not match any known Cisco OpenH264 release",
+            path.display()
+        );
+    }
     let expected = KNOWN_HASHES
         .iter()
         .find(|(n, _)| *n == name)
         .map(|(_, h)| *h)
         .ok_or_else(|| anyhow!("unknown OpenH264 file name {name}"))?;
-    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
-    let digest = Sha256::digest(&bytes);
-    let got = hex(&digest);
     if got != expected {
         bail!(
             "SHA-256 mismatch for {}: expected {expected}, got {got}",

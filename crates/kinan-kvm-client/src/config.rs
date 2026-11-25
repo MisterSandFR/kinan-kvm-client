@@ -10,6 +10,11 @@ pub struct Settings {
     pub theme: Theme,
     pub language: String,
     pub privacy_warning_seen: bool,
+    /// User has accepted the OpenH264 download from Cisco (binary license).
+    pub openh264_consent: bool,
+    /// Offline-install escape hatch: path to a user-provided OpenH264 library.
+    /// When set, the application loads this file instead of fetching Cisco's.
+    pub openh264_local_path: Option<PathBuf>,
 }
 
 impl Default for Settings {
@@ -18,6 +23,8 @@ impl Default for Settings {
             theme: Theme::System,
             language: "auto".into(),
             privacy_warning_seen: false,
+            openh264_consent: false,
+            openh264_local_path: None,
         }
     }
 }
