@@ -15,10 +15,14 @@ ActiveX ; celui-ci est un binaire Rust autonome avec une interface
 eframe/egui, un décodage H.264 via OpenH264, et des traductions en anglais,
 français et chinois simplifié.
 
-![mire du simulateur embarqué](docs/screenshots/test-pattern.png)
+![grille des 16 ports, thème sombre](docs/screenshots/grid-dark.png)
 
-> La capture ci-dessus provient du simulateur embarqué, pas d'une vraie
-> console.
+![visionneuse affichant la mire du simulateur](docs/screenshots/viewer-dark.png)
+
+![grille des 16 ports, thème clair](docs/screenshots/grid-light.png)
+
+> Chaque capture ci-dessus est le client connecté à `kinan-sim`, pas à un
+> appareil réel.
 
 ## Fonctionnalités
 

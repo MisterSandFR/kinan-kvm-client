@@ -16,10 +16,14 @@ English, French and Simplified Chinese.
 
 A *lire en français :* [`README.fr.md`](README.fr.md).
 
-![test pattern from the bundled simulator](docs/screenshots/test-pattern.png)
+![grid of 16 ports, dark theme](docs/screenshots/grid-dark.png)
 
-> The screenshot above is rendered by the bundled test-pattern simulator,
-> not from a real console.
+![video viewer streaming the simulator test pattern](docs/screenshots/viewer-dark.png)
+
+![grid of 16 ports, light theme](docs/screenshots/grid-light.png)
+
+> Every screenshot above is the client connected to `kinan-sim`, not to a
+> real device.
 
 ## What it does
 
