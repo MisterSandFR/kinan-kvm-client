@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: kinan-kvm-client-${{ github.ref_name }}-windows-x64.zip
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: kinan-kvm-client-${{ github.ref_name }}-linux-x64.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libwayland-dev \
+            libxkbcommon-x11-dev libfontconfig1-dev nasm
+      - uses: Swatinem/rust-cache@v2
+      - name: Build client
+        run: cargo build --release --target ${{ matrix.target }} -p kinan-kvm-client
+      - name: Build simulator
+        run: cargo build --release --target ${{ matrix.target }} -p kinan-sim
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir dist
+          cp target/${{ matrix.target }}/release/kinan-kvm-client dist/
+          cp target/${{ matrix.target }}/release/kinan-sim dist/
+          cp README.md README.fr.md SECURITY.md LICENSE-MIT LICENSE-APACHE NOTICE dist/
+          tar -C dist -czf ${{ matrix.archive }} .
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir dist
+          cp target/${{ matrix.target }}/release/kinan-kvm-client.exe dist/
+          cp target/${{ matrix.target }}/release/kinan-sim.exe dist/
+          cp README.md README.fr.md SECURITY.md LICENSE-MIT LICENSE-APACHE NOTICE dist/
+          7z a -tzip ${{ matrix.archive }} ./dist/*
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.archive }}
+          draft: true
+          generate_release_notes: true

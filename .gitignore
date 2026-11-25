@@ -1,0 +1,11 @@
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Local tool outputs (not for publication)
+/docs/screenshots/*.ppm
+/local/
+*.log
+*.swp
+*.swo
+.DS_Store

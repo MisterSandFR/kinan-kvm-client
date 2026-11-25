@@ -1,0 +1,11 @@
+# Cross-compile from Linux to Windows GNU. Override locally if needed.
+# Comment out on native Windows (MSVC) or macOS/Linux builds.
+#[build]
+#target = "x86_64-pc-windows-gnu"
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-ar"
+# Note: MinGW builds depend on libstdc++-6.dll, libgcc_s_seh-1.dll and
+# libwinpthread-1.dll from the toolchain. The release workflow builds with
+# MSVC and avoids them entirely; MinGW cross-builds ship those three DLLs.

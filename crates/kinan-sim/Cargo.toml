@@ -1,0 +1,23 @@
+[package]
+name = "kinan-sim"
+description = "Simulated Kinan KVM switch for tests and demos."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "kinan-sim"
+path = "src/main.rs"
+
+[dependencies]
+kinan-protocol = { path = "../kinan-protocol" }
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+openh264 = { version = "0.6", default-features = false, features = ["source"] }
+png = "0.17"

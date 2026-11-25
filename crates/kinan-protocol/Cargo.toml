@@ -1,0 +1,15 @@
+[package]
+name = "kinan-protocol"
+description = "Pure-Rust types and parsers for the Kinan KVM-over-IP binary protocol."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+thiserror.workspace = true
