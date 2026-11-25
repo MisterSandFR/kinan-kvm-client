@@ -845,6 +845,7 @@ fn draw_settings(app: &mut App, ctx: &Context) {
         ui.separator();
         ui.label(app.t("about.unaffiliated"));
         ui.label(app.t("about.license"));
+        ui.label(app.t("about.cisco_credit"));
     });
 }
 
@@ -1051,6 +1052,8 @@ fn draw_openh264_consent(app: &mut App, ctx: &Context) {
             ui.label(app.t("openh264.consent.body"));
             ui.add_space(6.0);
             ui.weak(app.t("openh264.consent.license"));
+            ui.add_space(6.0);
+            ui.label(app.t("openh264.consent.credit"));
             ui.add_space(18.0);
             ui.horizontal(|ui| {
                 ui.add_space(ui.available_width() / 2.0 - 180.0);
