@@ -14,10 +14,13 @@ path = "src/main.rs"
 
 [dependencies]
 kinan-protocol = { path = "../kinan-protocol" }
+kinan-h264 = { path = "../kinan-h264" }
 anyhow.workspace = true
 log.workspace = true
 env_logger.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-openh264 = { version = "0.6", default-features = false, features = ["source"] }
+# Même règle que le client : OpenH264 chargé via le binaire Cisco (kinan-h264).
+openh264 = { version = "0.6", default-features = false, features = ["libloading"] }
+openh264-sys2 = { version = "0.6", default-features = false, features = ["libloading"] }
 png = "0.17"

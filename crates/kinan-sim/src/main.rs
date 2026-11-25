@@ -37,6 +37,13 @@ fn main() -> Result<()> {
         println!("pattern written to {}", path.display());
         return Ok(());
     }
+
+    // Fetch the Cisco OpenH264 binary on first launch (same path as the client).
+    log::info!("preparing OpenH264...");
+    let h264_path =
+        kinan_h264::ensure_available(None).context("obtaining OpenH264 from ciscobinary.openh264.org")?;
+    log::info!("OpenH264 loaded from {}", h264_path.display());
+
     log::info!(
         "kinan-sim listening on {}: web={} switch={} video={} km={}",
         opts.bind,
@@ -46,7 +53,10 @@ fn main() -> Result<()> {
         opts.km_port
     );
 
-    let state = Arc::new(State::default());
+    let state = Arc::new(State {
+        current: AtomicU8::new(0xFF),
+        h264_path,
+    });
 
     spawn_listener(opts.bind, opts.web_port, {
         let state = state.clone();
@@ -155,10 +165,11 @@ impl Options {
     }
 }
 
-#[derive(Default)]
 struct State {
     // Zero-based index of the currently selected port, or 0xFF when none.
     current: AtomicU8,
+    // Path to the Cisco OpenH264 binary used by the encoder thread.
+    h264_path: std::path::PathBuf,
 }
 
 fn spawn_listener<F>(bind: IpAddr, port: u16, handler: F) -> Result<()>
@@ -319,7 +330,8 @@ fn serve_video(mut stream: TcpStream, opts: &Options, state: &State) -> Result<(
     let width = opts.width as usize;
     let height = opts.height as usize;
     let cfg = EncoderConfig::new();
-    let mut encoder = Encoder::with_api_config(openh264::OpenH264API::from_source(), cfg)?;
+    let api = kinan_h264::load(&state.h264_path)?;
+    let mut encoder = Encoder::with_api_config(api, cfg)?;
     let mut counter = 0u32;
     let started = Instant::now();
     while counter < 450 {
